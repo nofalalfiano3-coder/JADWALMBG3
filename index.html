@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- ExcelJS: pembuatan file Excel (.xlsx) berformat di browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
   <!-- Firebase SDK (compat): Realtime Database + Authentication -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -696,14 +698,24 @@
               <h2 class="text-base font-extrabold text-slate-900">Tambah Personil Baru</h2>
               <p class="text-xs text-slate-500">Hanya status <strong>Aktif</strong> yang masuk jadwal; <strong>PJBL / Sakit / TK</strong> otomatis dikunci.</p>
             </div>
-            <button
-              type="button"
-              onclick="confirmResetSeedData()"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:border-orange-300 hover:text-orange-700 transition-colors cursor-pointer self-start sm:self-auto"
-            >
-              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-              <span>Reset Data Demo</span>
-            </button>
+            <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                onclick="confirmResetSeedData()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:border-orange-300 hover:text-orange-700 transition-colors cursor-pointer"
+              >
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Reset Data Demo</span>
+              </button>
+              <button
+                type="button"
+                onclick="confirmClearAllStaffData()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition-colors cursor-pointer"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>Hapus Semua Data Petugas</span>
+              </button>
+            </div>
           </div>
 
           <form onsubmit="handleAddNewStaff(event)" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
@@ -918,15 +930,26 @@
                 </button>
               </div>
 
-              <!-- Export CSV -->
-              <button
-                type="button"
-                onclick="exportRecapCSV()"
-                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span>Export CSV</span>
-              </button>
+              <!-- Export Excel & CSV -->
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onclick="exportRecapExcel()"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors cursor-pointer"
+                  title="Unduh rekapan per kelas, diurutkan abjad nama petugas"
+                >
+                  <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
+                  <span>Export Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onclick="exportRecapCSV()"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1704,7 +1727,7 @@
       setDbStatus('online');
 
       const val = snap.val();
-      if (!val || !val.staff) {
+      if (!val) {
         // Database masih kosong: pakai data demo (disimpan ke Firebase begitu Manager login)
         remoteEmpty = true;
         if (firstLoad || state.staff.length === 0) {
@@ -1775,6 +1798,30 @@
         refreshAllUI();
         showToast('Data demo (72 personil) & jadwal awal berhasil dipulihkan.', 'success');
       }
+    }
+
+    /**
+     * Hapus SELURUH data petugas (Manager, Kepala Distribusi, Petugas Zona) beserta
+     * seluruh jadwal (karena jadwal merujuk ke petugas). Tersimpan ke Firebase.
+     */
+    function confirmClearAllStaffData() {
+      const total = state.staff.length;
+      const totalSched = Object.keys(state.schedules).length;
+      if (total === 0 && totalSched === 0) {
+        showToast('Data petugas sudah kosong.', 'info');
+        return;
+      }
+      openConfirmModal(
+        'Hapus Semua Data Petugas',
+        `${total} personil (Manager, Kepala Distribusi, Petugas Zona) dan ${totalSched} jadwal akan dihapus permanen dari database Firebase. Tindakan ini tidak dapat dibatalkan dan berlaku untuk semua perangkat. Lanjutkan?`,
+        () => {
+          state.staff = [];
+          state.schedules = {};
+          saveState();
+          refreshAllUI();
+          showToast('Seluruh data petugas dan jadwal berhasil dihapus.', 'success');
+        }
+      );
     }
 
     function confirmResetSeedData() {
@@ -4379,6 +4426,273 @@
 
       openModal('officerDetailModal');
       refreshIcons();
+    }
+
+    /**
+     * ============================================================================
+     * EXPORT EXCEL (.xlsx): REKAPAN PER KELAS, URUT ABJAD NAMA PETUGAS
+     * Sheet: Ringkasan | Manlog 1 | Manlog 2 | Manager
+     * Mengikuti periode rekapan yang sedang aktif (Minggu / Bulan / Triwulan).
+     * ============================================================================
+     */
+    function buildRecapExcelModel() {
+      const { periodText, allOfficerRows } = buildRecapDataset();
+      const byName = (a, b) => a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+      const roleLabel = (r) => (r.role === 'Petugas' ? 'Petugas Zona' : r.role);
+      const limitLabel = (r) =>
+        r.monthlyOverInfo
+          ? `Melebihi ${MONTHLY_DUTY_LIMIT}x/bulan (${r.monthlyOverInfo.count}x)`
+          : r.role === 'Petugas'
+          ? `Normal (maks ${MONTHLY_DUTY_LIMIT}x/bulan)`
+          : 'Dikecualikan';
+      const historyLabel = (r) =>
+        r.history.length === 0
+          ? 'Belum bertugas'
+          : r.history
+              .map((h) => `${formatIndoDayName(h.date)}, ${formatIndoShortDate(h.date)} • ${h.locationLabel}`)
+              .join('\n');
+
+      const now = new Date();
+      const printedAt = `Dicetak: ${formatIndoFullDate(toLocalDateStr(now))} • ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} WIB`;
+
+      const nonManager = allOfficerRows.filter((r) => r.role !== 'Manager');
+      const managers = allOfficerRows.filter((r) => r.role === 'Manager').sort(byName);
+      const classGroups = ['Manlog 1', 'Manlog 2'].map((cls) => ({
+        cls,
+        rows: nonManager.filter((r) => r.classGroup === cls).sort(byName),
+      }));
+
+      const sheets = [];
+
+      // ---- Sheet Ringkasan ----
+      const summaryRows = classGroups.map(({ cls, rows }) => [
+        cls,
+        rows.length,
+        rows.filter((r) => r.status === 'Aktif').length,
+        rows.reduce((sum, r) => sum + r.dutyCount, 0),
+        Number(rows.reduce((sum, r) => sum + (r.totalPeriodPoints || 0), 0).toFixed(1)),
+        rows.filter((r) => r.monthlyOverInfo).length,
+      ]);
+      summaryRows.push([
+        'Manager',
+        managers.length,
+        managers.filter((r) => r.status === 'Aktif').length,
+        managers.reduce((sum, r) => sum + r.dutyCount, 0),
+        '-',
+        '-',
+      ]);
+      sheets.push({
+        name: 'Ringkasan',
+        title: 'REKAPAN TUGAS & POIN PETUGAS DISTRIBUSI MBG',
+        periodText,
+        printedAt,
+        totalLabelCol: 1,
+        columns: [
+          { header: 'Kelas', width: 18, align: 'left' },
+          { header: 'Jumlah Personil', width: 17, align: 'center', sum: true },
+          { header: 'Personil Aktif', width: 16, align: 'center', sum: true },
+          { header: 'Total Tugas', width: 14, align: 'center', sum: true },
+          { header: 'Total Poin Periode', width: 19, align: 'center', numFmt: '0.0', sum: true },
+          { header: `Melebihi Batas ${MONTHLY_DUTY_LIMIT}x/Bulan`, width: 24, align: 'center', sum: true },
+        ],
+        rows: summaryRows,
+      });
+
+      // ---- Sheet per kelas (urut abjad) ----
+      classGroups.forEach(({ cls, rows }) => {
+        sheets.push({
+          name: cls,
+          title: `REKAPAN PETUGAS ${cls.toUpperCase()} (URUT ABJAD NAMA)`,
+          periodText,
+          printedAt,
+          totalLabelCol: 2,
+          filter: true,
+          columns: [
+            { header: 'No', width: 6, align: 'center' },
+            { header: 'Nama Petugas', width: 30, align: 'left' },
+            { header: 'Peran', width: 19, align: 'left' },
+            { header: 'Status', width: 12, align: 'center', badge: 'status' },
+            { header: 'Poin Dasar', width: 12, align: 'center', numFmt: '0.0' },
+            { header: 'Jumlah Bertugas', width: 16, align: 'center', sum: true },
+            { header: 'Status Batas Bulanan', width: 26, align: 'left', badge: 'limit' },
+            { header: 'Total Poin Periode', width: 18, align: 'center', numFmt: '0.0', sum: true },
+            { header: 'Rincian Tanggal & Lokasi Tugas', width: 52, align: 'left', wrap: true },
+          ],
+          rows: rows.map((r, i) => [
+            i + 1,
+            r.name,
+            roleLabel(r),
+            r.status,
+            Number(r.points) || 0,
+            r.dutyCount,
+            limitLabel(r),
+            Number((r.totalPeriodPoints || 0).toFixed(1)),
+            historyLabel(r),
+          ]),
+        });
+      });
+
+      // ---- Sheet Manager (tanpa poin) ----
+      sheets.push({
+        name: 'Manager',
+        title: 'REKAPAN TUGAS MANAGER (URUT ABJAD NAMA)',
+        periodText,
+        printedAt,
+        totalLabelCol: 2,
+        filter: true,
+        columns: [
+          { header: 'No', width: 6, align: 'center' },
+          { header: 'Nama Manager', width: 30, align: 'left' },
+          { header: 'Peran', width: 16, align: 'left' },
+          { header: 'Status', width: 12, align: 'center', badge: 'status' },
+          { header: 'Jumlah Bertugas', width: 16, align: 'center', sum: true },
+          { header: 'Rincian Tanggal Tugas', width: 52, align: 'left', wrap: true },
+        ],
+        rows: managers.map((r, i) => [i + 1, r.name, 'Manager', r.status, r.dutyCount, historyLabel(r)]),
+      });
+
+      return { periodText, sheets };
+    }
+
+    function excelColLetter(n) {
+      let out = '';
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        out = String.fromCharCode(65 + rem) + out;
+        n = Math.floor((n - 1) / 26);
+      }
+      return out;
+    }
+
+    async function exportRecapExcel() {
+      if (!window.ExcelJS) {
+        showToast('Pustaka Excel gagal dimuat. Periksa koneksi internet atau gunakan Export CSV.', 'error');
+        return;
+      }
+
+      try {
+        const model = buildRecapExcelModel();
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'Sistem Distribusi MBG';
+        wb.created = new Date();
+
+        const thin = { style: 'thin', color: { argb: 'FFE2E8F0' } };
+        const border = { top: thin, left: thin, bottom: thin, right: thin };
+        const HEADER_ROW = 5;
+
+        model.sheets.forEach((sh) => {
+          const ncols = sh.columns.length;
+          const ws = wb.addWorksheet(sh.name, {
+            views: [{ state: 'frozen', ySplit: HEADER_ROW }],
+            pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+          });
+          sh.columns.forEach((col, i) => {
+            ws.getColumn(i + 1).width = col.width;
+          });
+
+          // Judul, periode, waktu cetak
+          [
+            [1, sh.title, { bold: true, size: 14, color: { argb: 'FFC2410C' } }],
+            [2, sh.periodText, { bold: true, size: 11, color: { argb: 'FF334155' } }],
+            [3, sh.printedAt, { italic: true, size: 10, color: { argb: 'FF64748B' } }],
+          ].forEach(([r, text, font]) => {
+            ws.mergeCells(r, 1, r, ncols);
+            const c = ws.getCell(r, 1);
+            c.value = text;
+            c.font = font;
+            c.alignment = { vertical: 'middle', horizontal: 'left' };
+          });
+
+          // Header tabel
+          sh.columns.forEach((col, i) => {
+            const c = ws.getCell(HEADER_ROW, i + 1);
+            c.value = col.header;
+            c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF97316' } };
+            c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            c.border = border;
+          });
+          ws.getRow(HEADER_ROW).height = 30;
+
+          // Baris data
+          if (sh.rows.length === 0) {
+            const r = HEADER_ROW + 1;
+            ws.mergeCells(r, 1, r, ncols);
+            const c = ws.getCell(r, 1);
+            c.value = 'Belum ada petugas pada kelompok ini.';
+            c.font = { italic: true, color: { argb: 'FF94A3B8' } };
+            c.alignment = { horizontal: 'center', vertical: 'middle' };
+            return;
+          }
+
+          sh.rows.forEach((rowVals, ri) => {
+            const r = HEADER_ROW + 1 + ri;
+            rowVals.forEach((val, ci) => {
+              const col = sh.columns[ci];
+              const c = ws.getCell(r, ci + 1);
+              c.value = val;
+              c.border = border;
+              c.alignment = { vertical: 'top', horizontal: col.align || 'left', wrapText: Boolean(col.wrap) };
+              if (col.numFmt) c.numFmt = col.numFmt;
+              if (ri % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+
+              if (col.badge === 'status') {
+                const ok = val === 'Aktif';
+                c.font = { bold: true, color: { argb: ok ? 'FF047857' : 'FFB45309' } };
+                c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ok ? 'FFECFDF5' : 'FFFFFBEB' } };
+              } else if (col.badge === 'limit' && String(val).startsWith('Melebihi')) {
+                c.font = { bold: true, color: { argb: 'FFBE123C' } };
+                c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
+              }
+            });
+          });
+
+          // Baris total
+          const firstData = HEADER_ROW + 1;
+          const lastData = HEADER_ROW + sh.rows.length;
+          const totalRow = lastData + 1;
+          sh.columns.forEach((col, ci) => {
+            const c = ws.getCell(totalRow, ci + 1);
+            c.font = { bold: true, color: { argb: 'FF7C2D12' } };
+            c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+            c.border = border;
+            c.alignment = { vertical: 'middle', horizontal: col.align || 'left' };
+            if (col.numFmt) c.numFmt = col.numFmt;
+            if (ci + 1 === sh.totalLabelCol) {
+              c.value = 'TOTAL';
+            } else if (col.sum) {
+              const letter = excelColLetter(ci + 1);
+              const result = sh.rows.reduce((sum, rv) => sum + (typeof rv[ci] === 'number' ? rv[ci] : 0), 0);
+              c.value = { formula: `SUM(${letter}${firstData}:${letter}${lastData})`, result };
+            }
+          });
+
+          if (sh.filter) {
+            ws.autoFilter = {
+              from: { row: HEADER_ROW, column: 1 },
+              to: { row: lastData, column: ncols },
+            };
+          }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Rekapan_Petugas_MBG_${recapPeriodMode}_${toLocalDateStr(new Date())}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        showToast('File Excel rekapan per kelas berhasil diunduh.', 'success');
+      } catch (err) {
+        console.error('Gagal membuat file Excel:', err);
+        showToast('Gagal membuat file Excel. Coba lagi atau gunakan Export CSV.', 'error');
+      }
     }
 
     function exportRecapCSV() {
