@@ -1282,16 +1282,18 @@
      */
 
     /**
-     * KONFIGURASI FIREBASE
-     * Ambil nilai apiKey dari: Firebase Console > Project settings (ikon roda gigi) >
-     * General > Your apps > Web app > SDK setup and configuration.
-     * Ganti 'ISI_API_KEY_FIREBASE_ANDA' dengan apiKey proyek Anda.
+     * KONFIGURASI FIREBASE (proyek: jadwalmbg)
+     * Catatan: apiKey Firebase untuk web memang bersifat publik. Keamanan data
+     * dijaga oleh Rules Realtime Database dan Firebase Authentication.
      */
     const FIREBASE_CONFIG = {
-      apiKey: 'ISI_API_KEY_FIREBASE_ANDA',
+      apiKey: 'AIzaSyBwcskNPiU4uH0wmy62b5cMY95e3tpjqL8',
       authDomain: 'jadwalmbg.firebaseapp.com',
       databaseURL: 'https://jadwalmbg-default-rtdb.asia-southeast1.firebasedatabase.app',
       projectId: 'jadwalmbg',
+      storageBucket: 'jadwalmbg.firebasestorage.app',
+      messagingSenderId: '318559876222',
+      appId: '1:318559876222:web:86008369cf7dfa3c6a542f',
     };
     const DB_ROOT_PATH = 'mbg_scheduler_v1';
     const MONTHLY_DUTY_LIMIT = 4;
